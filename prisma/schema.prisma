@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// MODELO: Rol
+// Descripción: Define los roles de usuarios (PACIENTE, MEDICO)
+// ============================================
+model Rol {
+  id    Int     @id @default(autoincrement())
+  nombre String @unique // "PACIENTE" | "MEDICO"
+  
+  usuarios Usuario[]
+  
+  @@map("roles")
+}
+
+// ============================================
+// MODELO: Usuario
+// Descripción: Base de todos los usuarios del sistema
+// ============================================
+model Usuario {
+  id                Int     @id @default(autoincrement())
+  email             String  @unique
+  password_hash     String?
+  oauth_provider    String?
+  oauth_provider_id String?
+  role_id           Int
+  nombre            String
+  apellido          String
+  telefono          String?
+  activo            Boolean @default(true)
+  fecha_creacion    DateTime @default(now())
+  
+  // Relaciones
+  rol    Rol      @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  paciente Paciente?
+  medico   Medico?
+  
+  @@map("usuarios")
+}
+
+// ============================================
+// MODELO: Paciente
+// Descripción: Perfil extendido del Usuario (rol = PACIENTE)
+// ============================================
+model Paciente {
+  id                 Int       @id @default(autoincrement())
+  usuario_id         Int       @unique
+  fecha_nacimiento   DateTime?
+  direccion          String?
+  sexo               String?
+  
+  // Relaciones
+  usuario   Usuario     @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  detalles  DetallesPaciente?
+  citas     Cita[]
+  
+  @@map("pacientes")
+}
+
+// ============================================
+// MODELO: DetallesPaciente
+// Descripción: Información médica adicional del paciente
+// ============================================
+model DetallesPaciente {
+  id                        Int       @id @default(autoincrement())
+  paciente_id               Int       @unique
+  altura_cm                 Int?
+  peso_kg                   Int?
+  alergias                  String?
+  enfermedades_previas      String?
+  medicamentos_actuales     String?
+  antecedentes_familiares   String?
+  
+  // Relaciones
+  paciente Paciente @relation(fields: [paciente_id], references: [id], onDelete: Cascade)
+  
+  @@map("detalles_pacientes")
+}
+
+// ============================================
+// MODELO: Médico
+// Descripción: Perfil extendido del Usuario (rol = MEDICO)
+// ============================================
+model Medico {
+  id              Int     @id @default(autoincrement())
+  usuario_id      Int     @unique
+  especialidad    String
+  descripcion     String?
+  foto_perfil     String? // base64
+  
+  // Relaciones
+  usuario              Usuario                @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  disponibilidades     DisponibilidadMedico[]
+  citas                Cita[]
+  
+  @@map("medicos")
+}
+
+// ============================================
+// MODELO: DisponibilidadMedico
+// Descripción: Disponibilidad por fecha del médico (calendario)
+// ============================================
+model DisponibilidadMedico {
+  id              Int       @id @default(autoincrement())
+  medico_id       Int
+  fecha           DateTime  @db.Date // YYYY-MM-DD
+  disponible      Boolean   @default(true)
+  fecha_creacion  DateTime  @default(now())
+  
+  // Relaciones
+  medico Medico @relation(fields: [medico_id], references: [id], onDelete: Cascade)
+  
+  // Índice para búsquedas rápidas
+  @@unique([medico_id, fecha])
+  @@map("disponibilidades_medico")
+}
+
+// ============================================
+// MODELO: Cita
+// Descripción: Reserva entre paciente y médico
+// ============================================
+model Cita {
+  id                  Int       @id @default(autoincrement())
+  paciente_id         Int
+  medico_id           Int
+  fecha               DateTime
+  hora_inicio         String    // HH:mm formato
+  hora_fin            String    // HH:mm formato
+  estado              String    @default("pendiente") // "pendiente" | "aceptada" | "rechazada" | "cancelada"
+  motivo              String?
+  comentario_medico   String?
+  fecha_creacion      DateTime  @default(now())
+  
+  // Relaciones
+  paciente Paciente @relation(fields: [paciente_id], references: [id], onDelete: Cascade)
+  medico   Medico   @relation(fields: [medico_id], references: [id], onDelete: Cascade)
+  
+  @@map("citas")
+}

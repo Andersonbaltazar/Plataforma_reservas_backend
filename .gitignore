@@ -42,3 +42,18 @@ temp/
 # Testing
 coverage/
 .nyc_output/
+test-*.js
+test-*.ps1
+
+# Scripts de utilidad (no subir)
+run-migration.js
+listar-tablas.js
+
+# Prisma
+/src/generated/prisma
+prisma.config.ts
+
+# VS Code
+.vscode/settings.json
+*.code-workspace
+
