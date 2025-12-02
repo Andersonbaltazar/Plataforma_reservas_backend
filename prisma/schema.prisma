@@ -105,13 +105,15 @@ model Medico {
 
 // ============================================
 // MODELO: DisponibilidadMedico
-// Descripción: Disponibilidad por fecha del médico (calendario)
+// Descripción: Días NO DISPONIBLES del médico (calendario)
+// El médico marca los días que NO puede atender
 // ============================================
 model DisponibilidadMedico {
   id              Int       @id @default(autoincrement())
   medico_id       Int
   fecha           DateTime  @db.Date // YYYY-MM-DD
-  disponible      Boolean   @default(true)
+  no_disponible   Boolean   @default(true) // true = médico NO disponible ese día
+  razon           String?   // Ej: "Vacaciones", "Cirugía programada", "Capacitación"
   fecha_creacion  DateTime  @default(now())
   
   // Relaciones

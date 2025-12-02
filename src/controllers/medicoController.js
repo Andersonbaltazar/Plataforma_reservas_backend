@@ -128,7 +128,7 @@ const obtenerMedicoPorId = async (req, res) => {
     );
 
     const disponibilidadesResult = await client.query(
-      'SELECT * FROM disponibilidades_medico WHERE medico_id = $1 ORDER BY dia_semana',
+      'SELECT * FROM disponibilidades_medico WHERE medico_id = $1 ORDER BY fecha ASC',
       [id]
     );
 

@@ -12,7 +12,10 @@ const {
 const {
   agregarDisponibilidad,
   obtenerDisponibilidades,
-  eliminarDisponibilidad
+  eliminarDisponibilidad,
+  marcarRangoNoDisponible,
+  obtenerCalendarioMes,
+  eliminarRangoNoDisponible
 } = require('../controllers/disponibilidadController');
 
 const {
@@ -39,11 +42,20 @@ router.put('/:id', actualizarMedico);
 // 🟢 POST: Agregar disponibilidad horaria
 router.post('/:id/disponibilidad', agregarDisponibilidad);
 
+// 🟢 POST: Marcar múltiples días NO disponibles (rango)
+router.post('/:id/disponibilidad-rango', marcarRangoNoDisponible);
+
 // 🟢 GET: Obtener disponibilidades de un médico
 router.get('/:id/disponibilidades', obtenerDisponibilidades);
 
+// 🟢 GET: Obtener calendario del mes (disponibles vs no disponibles)
+router.get('/:id/calendario', obtenerCalendarioMes);
+
 // 🟢 DELETE: Eliminar disponibilidad
 router.delete('/disponibilidad/:disponibilidadId', eliminarDisponibilidad);
+
+// 🟢 DELETE: Eliminar rango de marcaciones (dejar disponible todo el rango)
+router.delete('/:id/disponibilidad-rango', eliminarRangoNoDisponible);
 
 // ===== ENDPOINTS DE CITAS =====
 

@@ -45,9 +45,11 @@ coverage/
 test-*.js
 test-*.ps1
 
-# Scripts de utilidad (no subir)
+# Scripts de utilidad (no subir estos)
 run-migration.js
 listar-tablas.js
+
+# db-setup.js SÍ debe subirse - es la inicialización de BD para los compañeros
 
 # Prisma
 /src/generated/prisma
