@@ -3,15 +3,19 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const GitHubStrategy = require('passport-github2').Strategy;
 const { findOrCreateOAuthUser } = require('../models/users');
 
-// Serialización de usuario para sesiones
+// Serialización de usuario para sesiones (no se usa con session: false, pero lo mantenemos por compatibilidad)
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
 
-passport.deserializeUser((id, done) => {
-  const { findUserById } = require('../models/users');
-  const user = findUserById(id);
-  done(null, user || null);
+passport.deserializeUser(async (id, done) => {
+  try {
+    const { findUserById } = require('../models/users');
+    const user = await findUserById(id);
+    done(null, user || null);
+  } catch (error) {
+    done(error, null);
+  }
 });
 
 // Estrategia Google OAuth (solo si las credenciales están configuradas)
