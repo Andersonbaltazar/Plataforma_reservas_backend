@@ -1,8 +1,19 @@
-require('dotenv').config();
+// Cargar variables de entorno PRIMERO, antes de cualquier otra importación
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
 const express = require('express');
 const cors = require('cors');
 const passport = require('./config/passport');
 const authRoutes = require('./routes/authRoutes');
+
+// Verificar que las variables críticas estén cargadas
+if (process.env.NODE_ENV !== 'production') {
+  console.log('📋 Variables de entorno cargadas:');
+  console.log(`   PORT: ${process.env.PORT || 'no configurado'}`);
+  console.log(`   JWT_SECRET: ${process.env.JWT_SECRET ? '✅ configurado' : '❌ no configurado'}`);
+  console.log(`   GOOGLE_CLIENT_ID: ${process.env.GOOGLE_CLIENT_ID ? '✅ configurado' : '❌ no configurado'}`);
+  console.log(`   GOOGLE_CLIENT_SECRET: ${process.env.GOOGLE_CLIENT_SECRET ? '✅ configurado' : '❌ no configurado'}`);
+}
 
 const app = express();
 
