@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const passport = require('./config/passport');
 const authRoutes = require('./routes/authRoutes');
+const medicoRoutes = require('./routes/medicoRoutes');
 
 // Verificar que las variables críticas estén cargadas
 if (process.env.NODE_ENV !== 'production') {
@@ -46,6 +47,7 @@ app.get('/health', (req, res) => {
 
 // Rutas de autenticación
 app.use('/auth', authRoutes);
+app.use('/api/medicos', medicoRoutes);
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
