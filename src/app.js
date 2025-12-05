@@ -6,6 +6,8 @@ const cors = require('cors');
 const passport = require('./config/passport');
 const authRoutes = require('./routes/authRoutes');
 const medicoRoutes = require('./routes/medicoRoutes');
+const pacienteRoutes = require('./routes/pacienteRoutes');
+const citaRoutes = require('./routes/citaRoutes');
 
 // Verificar que las variables críticas estén cargadas
 if (process.env.NODE_ENV !== 'production') {
@@ -27,15 +29,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
-// ============================================
-// RUTAS BÁSICAS
-// ============================================
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: 'Bienvenido a Plataforma de Reservas Backend',
     version: '1.0.0',
     endpoints: {
       medicos: '/api/medicos',
+      pacientes: '/api/paciente',
+      citas: '/api/citas',
       health: '/health'
     }
   });
@@ -48,6 +49,8 @@ app.get('/health', (req, res) => {
 // Rutas de autenticación
 app.use('/auth', authRoutes);
 app.use('/api/medicos', medicoRoutes);
+app.use('/api/paciente', pacienteRoutes);
+app.use('/api/citas', citaRoutes);
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
