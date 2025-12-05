@@ -60,9 +60,12 @@ Crea un nuevo usuario en el sistema.
 ```json
 {
   "message": "Usuario registrado exitosamente",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
-    "id": 1,
+    "id": "1",
     "email": "usuario@example.com",
+    "nombre": "Juan",
+    "apellido": "Pérez",
     "name": "Juan Pérez"
   }
 }
@@ -119,10 +122,13 @@ Crea un nuevo usuario con rol MÉDICO y su perfil profesional.
   "message": "Médico registrado exitosamente",
   "token": "eyJhb...",
   "user": {
-    "roleId": 2,
+    "id": "2",
     "email": "doctor@example.com",
-    "especialidad": "Diagnóstico",
-    "medico_id": 1
+    "nombre": "Gregory",
+    "apellido": "House",
+    "roleId": 2,
+    "medico_id": 1,
+    "especialidad": "Diagnóstico"
   }
 }
 ```
