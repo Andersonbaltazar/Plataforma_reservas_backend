@@ -28,13 +28,13 @@ node db-setup.js
 npm run dev
 ```
 
-El servidor corre en: **http://localhost:3000**
+El servidor corre en: **http://localhost:3001**
 
 ---
 
 ## 📡 ENDPOINTS HABILITADOS
 
-**Base URL:** `http://localhost:3000/api/medicos`
+**Base URL:** `http://localhost:3001/api/medicos`
 
 ### 👨‍⚕️ MÉDICOS (3 endpoints)
 
