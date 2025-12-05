@@ -12,9 +12,9 @@ const checkOAuthStrategy = (strategyName, requiredEnvVars) => {
         value: trimmedValue ? (trimmedValue.length > 20 ? trimmedValue.substring(0, 20) + '...' : trimmedValue) : undefined
       };
     });
-    
+
     const hasAllEnvVars = envStatus.every(status => status.exists && status.hasValue);
-    
+
     if (!hasAllEnvVars) {
       const missing = envStatus.filter(s => !s.exists || !s.hasValue).map(s => s.name);
       return res.status(500).json({
@@ -24,7 +24,7 @@ const checkOAuthStrategy = (strategyName, requiredEnvVars) => {
         envStatus: envStatus
       });
     }
-    
+
     next();
   };
 };
@@ -33,11 +33,5 @@ const checkOAuthStrategy = (strategyName, requiredEnvVars) => {
 exports.checkGoogleStrategy = checkOAuthStrategy('google', [
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET'
-]);
-
-// Middleware específico para GitHub
-exports.checkGitHubStrategy = checkOAuthStrategy('github', [
-  'GITHUB_CLIENT_ID',
-  'GITHUB_CLIENT_SECRET'
 ]);
 
