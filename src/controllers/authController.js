@@ -2,6 +2,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { findUserByEmail, createUser } = require('../models/users');
 const { isValidEmail, isValidPassword } = require('../utils/validators');
+const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 
 const register = async (req, res) => {
   try {
@@ -28,7 +30,7 @@ const register = async (req, res) => {
 
     // Hash de contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     // Crear usuario (rol por defecto: PACIENTE = 1)
     const user = await createUser({
       email: email.trim().toLowerCase(),
@@ -38,6 +40,13 @@ const register = async (req, res) => {
       telefono: telefono || null
     }, 1); // roleId = 1 = PACIENTE
 
+    // Crear perfil de paciente vacío
+    const paciente = await prisma.paciente.create({
+      data: {
+        usuario_id: parseInt(user.id)
+      }
+    });
+
     // Verificar JWT_SECRET
     if (!process.env.JWT_SECRET) {
       console.error('JWT_SECRET no configurado en variables de entorno');
@@ -46,8 +55,8 @@ const register = async (req, res) => {
 
     // Generar JWT con userId, email y roleId
     const token = jwt.sign(
-      { 
-        userId: user.id, 
+      {
+        userId: user.id,
         email: user.email,
         roleId: user.roleId || 1
       },
@@ -68,13 +77,13 @@ const register = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en register:', error);
-    
+
     // Manejo específico de errores de BD
     if (error.code === '23505') { // Unique constraint violation
       return res.status(409).json({ error: 'El email ya está registrado' });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: 'Error al registrar usuario',
       message: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -121,8 +130,8 @@ const login = async (req, res) => {
 
     // Generar JWT con userId, email y roleId
     const token = jwt.sign(
-      { 
-        userId: user.id, 
+      {
+        userId: user.id,
         email: user.email,
         roleId: user.roleId || 1
       },
@@ -145,7 +154,7 @@ const login = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error al iniciar sesión',
       message: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -170,13 +179,104 @@ const me = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en me:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error al obtener información del usuario',
       message: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
-module.exports = { register, login, me };
+
+const registerMedico = async (req, res) => {
+  try {
+    const { email, password, name, apellido, telefono, especialidad, descripcion } = req.body;
+
+    // Validaciones básicas
+    if (!email || !password || !especialidad) {
+      return res.status(400).json({ error: 'Email, contraseña y especialidad son requeridos' });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Formato de email inválido' });
+    }
+
+    if (!isValidPassword(password)) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    // Verificar si el usuario ya existe
+    const existingUser = await findUserByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({ error: 'El email ya está registrado' });
+    }
+
+    // Hash de contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Crear usuario (rol 2 = MEDICO)
+    const user = await createUser({
+      email: email.trim().toLowerCase(),
+      password: hashedPassword,
+      name: name || email.split('@')[0],
+      apellido: apellido || null,
+      telefono: telefono || null
+    }, 2); // roleId = 2 = MEDICO
+
+    // Crear perfil de médico
+    const medico = await prisma.medico.create({
+      data: {
+        usuario_id: parseInt(user.id),
+        especialidad: especialidad,
+        descripcion: descripcion || null
+      }
+    });
+
+    // Verificar JWT_SECRET
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET no configurado en variables de entorno');
+      return res.status(500).json({ error: 'Error de configuración del servidor' });
+    }
+
+    // Generar JWT
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        roleId: 2
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.status(201).json({
+      message: 'Médico registrado exitosamente',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        nombre: user.nombre,
+        apellido: user.apellido,
+        roleId: 2,
+        medico_id: medico.id,
+        especialidad: medico.especialidad
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en registerMedico:', error);
+
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'El email ya está registrado' });
+    }
+
+
+    res.status(500).json({
+      error: 'Error al registrar médico',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+module.exports = { register, login, me, registerMedico };
 
 

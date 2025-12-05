@@ -9,7 +9,8 @@ Documentación completa de los endpoints de autenticación del backend.
 ## 📋 Tabla de Contenidos
 
 1. [Autenticación por Credenciales](#-autenticación-por-credenciales)
-   - [Registro](#1-registro)
+   - [Registro de Paciente](#1-registro)
+   - [Registro de Médico](#2-registro-médico)
    - [Login](#2-login)
    - [Obtener Usuario Actual](#3-obtener-usuario-actual)
 2. [OAuth con Google](#-oauth-con-google)
@@ -59,12 +60,9 @@ Crea un nuevo usuario en el sistema.
 ```json
 {
   "message": "Usuario registrado exitosamente",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
-    "id": "1",
+    "id": 1,
     "email": "usuario@example.com",
-    "nombre": "Juan",
-    "apellido": "Pérez",
     "name": "Juan Pérez"
   }
 }
@@ -84,6 +82,49 @@ curl -X POST http://localhost:3001/auth/register \
     "password": "password123",
     "name": "Juan Pérez"
   }'
+```
+
+---
+
+### 2. Registro Médico
+
+Crea un nuevo usuario con rol MÉDICO y su perfil profesional.
+
+**Endpoint:** `POST /auth/register-medico`
+
+**Body:**
+```json
+{
+  "email": "doctor@example.com",
+  "password": "password123",
+  "name": "Gregory",
+  "apellido": "House",
+  "telefono": "+1234567890",
+  "especialidad": "Diagnóstico",
+  "descripcion": "Especialista en enfermedades raras"
+}
+```
+
+**Campos:**
+- `email` (requerido): Email del usuario
+- `password` (requerido): Contraseña
+- `name` (opcional): Nombre
+- `apellido` (opcional): Apellido
+- `especialidad` (requerido): Especialidad médica
+- `descripcion` (opcional): Descripción profesional
+
+**Response:** `201 Created`
+```json
+{
+  "message": "Médico registrado exitosamente",
+  "token": "eyJhb...",
+  "user": {
+    "roleId": 2,
+    "email": "doctor@example.com",
+    "especialidad": "Diagnóstico",
+    "medico_id": 1
+  }
+}
 ```
 
 ---
@@ -122,6 +163,9 @@ Inicia sesión con email y contraseña.
   }
 }
 ```
+
+> [!NOTE]
+> Este endpoint crea automáticamente un perfil vacío en la tabla `pacientes`.
 
 **Errores:**
 - `400`: Email o contraseña faltantes, formato inválido

@@ -1,6 +1,6 @@
 const express = require('express');
 const passport = require('../config/passport');
-const { register, login, me } = require('../controllers/authController');
+const { register, login, me, registerMedico } = require('../controllers/authController');
 const { authenticateToken } = require('../middlewares/auth');
 const { checkGoogleStrategy } = require('../middlewares/oauth');
 const jwt = require('jsonwebtoken');
@@ -9,6 +9,7 @@ const router = express.Router();
 
 // Autenticación por credenciales
 router.post('/register', register);
+router.post('/register-medico', registerMedico);
 router.post('/login', login);
 router.get('/me', authenticateToken, me);
 
