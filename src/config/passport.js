@@ -2,7 +2,6 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { findOrCreateOAuthUser } = require('../models/users');
 
-// Serialización de usuario para sesiones (no se usa con session: false, pero lo mantenemos por compatibilidad)
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
@@ -17,7 +16,6 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Estrategia Google OAuth (solo si las credenciales están configuradas)
 const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
@@ -42,11 +40,7 @@ if (googleClientId && googleClientSecret) {
       }
     )
   );
-  console.log('✅ Estrategia Google OAuth configurada');
 } else {
-  console.warn('⚠️  Google OAuth no configurado: faltan GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET en .env');
-  console.warn(`   GOOGLE_CLIENT_ID: ${googleClientId ? '✅ configurado' : '❌ no encontrado'}`);
-  console.warn(`   GOOGLE_CLIENT_SECRET: ${googleClientSecret ? '✅ configurado' : '❌ no encontrado'}`);
 }
 
 module.exports = passport;

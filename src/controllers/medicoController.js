@@ -1,15 +1,7 @@
-const { Client } = require('pg');
-require('dotenv').config();
-
-const getClient = () => {
-  return new Client({
-    connectionString: process.env.DATABASE_URL
-  });
-};
+const prisma = require('../config/prisma');
 
 // ✅ Registrar un nuevo médico
 const registrarMedico = async (req, res) => {
-  const client = getClient();
   try {
     const {
       email,
@@ -21,143 +13,145 @@ const registrarMedico = async (req, res) => {
       foto_perfil
     } = req.body;
 
-    // Validaciones básicas
     if (!email || !nombre || !apellido || !especialidad) {
       return res.status(400).json({ error: 'Campos requeridos: email, nombre, apellido, especialidad' });
     }
 
-    await client.connect();
-
     // Verificar si el email ya existe
-    const usuarioExistente = await client.query('SELECT id FROM usuarios WHERE email = $1', [email]);
-    if (usuarioExistente.rows.length > 0) {
-      await client.end();
+    const usuarioExistente = await prisma.usuario.findUnique({
+      where: { email }
+    });
+
+    if (usuarioExistente) {
       return res.status(409).json({ error: 'El email ya está registrado' });
     }
 
     // Obtener rol de MEDICO
-    const rolResult = await client.query('SELECT id FROM roles WHERE nombre = $1', ['MEDICO']);
-    if (rolResult.rows.length === 0) {
-      await client.end();
+    const rol = await prisma.rol.findUnique({
+      where: { nombre: 'MEDICO' }
+    });
+
+    if (!rol) {
       return res.status(500).json({ error: 'Rol MEDICO no existe en la base de datos' });
     }
 
-    const roleId = rolResult.rows[0].id;
+    // Crear usuario y médico en una transacción
+    const result = await prisma.$transaction(async (tx) => {
+      const usuario = await tx.usuario.create({
+        data: {
+          email,
+          nombre,
+          apellido,
+          telefono,
+          role_id: rol.id
+        }
+      });
 
-    // Crear usuario
-    const usuarioResult = await client.query(
-      'INSERT INTO usuarios (email, nombre, apellido, telefono, role_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, nombre, apellido, telefono, fecha_creacion',
-      [email, nombre, apellido, telefono || null, roleId]
-    );
+      const medico = await tx.medico.create({
+        data: {
+          usuario_id: usuario.id,
+          especialidad,
+          descripcion,
+          foto_perfil
+        },
+        include: { usuario: true }
+      });
 
-    const usuario = usuarioResult.rows[0];
-
-    // Crear médico
-    const medicoResult = await client.query(
-      'INSERT INTO medicos (usuario_id, especialidad, descripcion, foto_perfil) VALUES ($1, $2, $3, $4) RETURNING id, usuario_id, especialidad, descripcion, foto_perfil',
-      [usuario.id, especialidad, descripcion || null, foto_perfil || null]
-    );
-
-    const medico = medicoResult.rows[0];
-
-    await client.end();
+      return medico;
+    });
 
     res.status(201).json({
       message: 'Médico registrado exitosamente',
-      data: {
-        ...medico,
-        usuario
-      }
+      data: result
     });
 
   } catch (error) {
     console.error(error);
-    await client.end();
     res.status(500).json({ error: 'Error al registrar médico' });
   }
 };
 
 // ✅ Obtener todos los médicos
 const obtenerMedicos = async (req, res) => {
-  const client = getClient();
   try {
-    await client.connect();
+    const medicos = await prisma.medico.findMany({
+      include: {
+        usuario: {
+          select: {
+            id: true,
+            email: true,
+            nombre: true,
+            apellido: true,
+            telefono: true,
+            fecha_creacion: true
+          }
+        }
+      }
+    });
 
-    const result = await client.query(`
-      SELECT m.*, u.id as usuario_id, u.email, u.nombre, u.apellido, u.telefono, u.fecha_creacion
-      FROM medicos m
-      JOIN usuarios u ON m.usuario_id = u.id
-    `);
-
-    await client.end();
+    // Transformar para aplanar usuario en el médico
+    const medicosTransformados = medicos.map(medico => ({
+      id: medico.id,
+      especialidad: medico.especialidad,
+      descripcion: medico.descripcion,
+      foto_perfil: medico.foto_perfil,
+      nombre: medico.usuario.nombre,
+      apellido: medico.usuario.apellido,
+      telefono: medico.usuario.telefono,
+      activo: true
+    }));
 
     res.json({
-      total: result.rows.length,
-      data: result.rows
+      success: true,
+      total: medicosTransformados.length,
+      data: medicosTransformados
     });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
-    res.status(500).json({ error: 'Error al obtener médicos' });
+    console.error('Error al obtener médicos:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener médicos' });
   }
 };
 
 // ✅ Obtener un médico por ID
 const obtenerMedicoPorId = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
-    await client.connect();
+    const medicoId = parseInt(id);
 
-    const medicoResult = await client.query(
-      'SELECT * FROM medicos WHERE id = $1',
-      [id]
-    );
-
-    if (medicoResult.rows.length === 0) {
-      await client.end();
-      return res.status(404).json({ error: 'Médico no encontrado' });
-    }
-
-    const medico = medicoResult.rows[0];
-
-    const usuarioResult = await client.query(
-      'SELECT * FROM usuarios WHERE id = $1',
-      [medico.usuario_id]
-    );
-
-    const disponibilidadesResult = await client.query(
-      'SELECT * FROM disponibilidades_medico WHERE medico_id = $1 ORDER BY fecha ASC',
-      [id]
-    );
-
-    const citasResult = await client.query(
-      'SELECT c.*, p.usuario_id as paciente_usuario_id FROM citas c JOIN pacientes p ON c.paciente_id = p.id WHERE c.medico_id = $1 ORDER BY c.fecha_hora DESC',
-      [id]
-    );
-
-    await client.end();
-
-    res.json({
-      data: {
-        ...medico,
-        usuario: usuarioResult.rows[0],
-        disponibilidades: disponibilidadesResult.rows,
-        citas: citasResult.rows
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId },
+      include: {
+        usuario: true,
+        disponibilidades: {
+          where: { disponible: false },
+          orderBy: { fecha: 'asc' }
+        },
+        citas: {
+          include: {
+            paciente: {
+              include: { usuario: true }
+            }
+          },
+          orderBy: { fecha_hora: 'desc' }
+        }
       }
     });
 
+    if (!medico) {
+      return res.status(404).json({ error: 'Médico no encontrado' });
+    }
+
+    res.json({ data: medico });
+
   } catch (error) {
     console.error(error);
-    await client.end();
     res.status(500).json({ error: 'Error al obtener médico' });
   }
 };
 
 // ✅ Actualizar datos del médico
 const actualizarMedico = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
     const {
@@ -169,56 +163,143 @@ const actualizarMedico = async (req, res) => {
       foto_perfil
     } = req.body;
 
-    await client.connect();
+    const medicoId = parseInt(id);
 
-    // Obtener médico
-    const medicoResult = await client.query(
-      'SELECT * FROM medicos WHERE id = $1',
-      [id]
-    );
+    // Verificar que el médico existe
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
-    const medico = medicoResult.rows[0];
+    // Actualizar en transacción
+    const result = await prisma.$transaction(async (tx) => {
+      // Actualizar usuario si hay cambios
+      if (nombre || apellido || telefono) {
+        await tx.usuario.update({
+          where: { id: medico.usuario_id },
+          data: {
+            ...(nombre && { nombre }),
+            ...(apellido && { apellido }),
+            ...(telefono && { telefono })
+          }
+        });
+      }
 
-    // Actualizar usuario si hay cambios
-    if (nombre || apellido || telefono) {
-      await client.query(
-        'UPDATE usuarios SET nombre = COALESCE($1, nombre), apellido = COALESCE($2, apellido), telefono = COALESCE($3, telefono) WHERE id = $4',
-        [nombre || null, apellido || null, telefono || null, medico.usuario_id]
-      );
-    }
+      // Actualizar médico
+      const medicoActualizado = await tx.medico.update({
+        where: { id: medicoId },
+        data: {
+          ...(especialidad && { especialidad }),
+          ...(descripcion !== undefined && { descripcion }),
+          ...(foto_perfil !== undefined && { foto_perfil })
+        },
+        include: { usuario: true }
+      });
 
-    // Actualizar médico
-    const updateResult = await client.query(
-      'UPDATE medicos SET especialidad = COALESCE($1, especialidad), descripcion = COALESCE($2, descripcion), foto_perfil = COALESCE($3, foto_perfil) WHERE id = $4 RETURNING *',
-      [especialidad || null, descripcion || null, foto_perfil || null, id]
-    );
-
-    const medicoActualizado = updateResult.rows[0];
-
-    const usuarioResult = await client.query(
-      'SELECT * FROM usuarios WHERE id = $1',
-      [medico.usuario_id]
-    );
-
-    await client.end();
+      return medicoActualizado;
+    });
 
     res.json({
       message: 'Médico actualizado exitosamente',
-      data: {
-        ...medicoActualizado,
-        usuario: usuarioResult.rows[0]
-      }
+      data: result
     });
 
   } catch (error) {
     console.error(error);
-    await client.end();
     res.status(500).json({ error: 'Error al actualizar médico' });
+  }
+};
+
+// ✅ Obtener disponibilidad (Horarios libres) para una fecha
+const obtenerDisponibilidad = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fecha } = req.query; // YYYY-MM-DD
+
+    if (!fecha) {
+      return res.status(400).json({ success: false, error: 'Fecha requerida (YYYY-MM-DD)' });
+    }
+
+    const medicoId = parseInt(id);
+
+    // 1. Definir horario base (Lunes a Viernes, 09:00 - 18:00)
+    const horaInicio = 9; // 9 AM
+    const horaFin = 18;   // 6 PM
+
+    // Generar todos los slots posibles
+    const slots = [];
+    for (let h = horaInicio; h < horaFin; h++) {
+      slots.push({
+        inicio: `${h.toString().padStart(2, '0')}:00`,
+        fin: `${(h + 1).toString().padStart(2, '0')}:00`
+      });
+    }
+
+    // 2. Obtener citas existentes para esa fecha y médico
+    const startOfDay = new Date(`${fecha}T00:00:00`);
+    const endOfDay = new Date(`${fecha}T23:59:59`);
+
+    // 1.5 Verificar si el día está marcado como NO DISPONIBLE explícitamente
+    const diaBloqueado = await prisma.disponibilidadMedico.findFirst({
+      where: {
+        medico_id: medicoId,
+        fecha: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        disponible: false
+      }
+    });
+
+    if (diaBloqueado) {
+      return res.json({
+        success: true,
+        data: {
+          disponible: false,
+          razon: 'El médico ha marcado este día como no disponible.',
+          horarios: []
+        }
+      });
+    }
+
+    const citas = await prisma.cita.findMany({
+      where: {
+        medico_id: medicoId,
+        fecha_hora: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        estado: {
+          not: 'cancelada' // Ignorar citas canceladas
+        }
+      }
+    });
+
+    // 3. Filtrar slots ocupados
+    const horariosDisponibles = slots.filter(slot => {
+      // Verificar si hay alguna cita que coincida con este slot
+      const ocupado = citas.some(cita => {
+        const citaHora = new Date(cita.fecha_hora).getHours();
+        const slotHora = parseInt(slot.inicio.split(':')[0]);
+        return citaHora === slotHora;
+      });
+      return !ocupado;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        disponible: horariosDisponibles.length > 0,
+        horarios: horariosDisponibles
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al obtener disponibilidad:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener disponibilidad' });
   }
 };
 
@@ -226,5 +307,6 @@ module.exports = {
   registrarMedico,
   obtenerMedicos,
   obtenerMedicoPorId,
-  actualizarMedico
+  actualizarMedico,
+  obtenerDisponibilidad
 };

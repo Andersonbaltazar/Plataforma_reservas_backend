@@ -95,8 +95,7 @@ model Medico {
   usuario_id      Int     @unique
   especialidad    String
   descripcion     String?
-  foto_perfil     String? // base64
-  
+
   // Relaciones
   usuario              Usuario                @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   disponibilidades     DisponibilidadMedico[]
@@ -114,8 +113,7 @@ model DisponibilidadMedico {
   id              Int       @id @default(autoincrement())
   medico_id       Int
   fecha           DateTime  @db.Date // YYYY-MM-DD
-  no_disponible   Boolean   @default(true) // true = médico NO disponible ese día
-  razon           String?   // Ej: "Vacaciones", "Cirugía programada", "Capacitación"
+  disponible      Boolean   @default(false) // false = NO disponible
   fecha_creacion  DateTime  @default(now())
   
   // Relaciones
@@ -134,10 +132,8 @@ model Cita {
   id                  Int       @id @default(autoincrement())
   paciente_id         Int
   medico_id           Int
-  fecha               DateTime
-  hora_inicio         String    // HH:mm formato
-  hora_fin            String    // HH:mm formato
-  estado              String    @default("pendiente") // "pendiente" | "aceptada" | "rechazada" | "cancelada"
+  fecha_hora          DateTime  // Fecha y hora combinadas
+  estado              String    @default("pendiente") // "pendiente" | "confirmada" | "completada" | "cancelada"
   motivo              String?
   comentario_medico   String?
   fecha_creacion      DateTime  @default(now())

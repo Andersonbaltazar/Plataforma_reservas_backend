@@ -2,20 +2,19 @@ const express = require('express');
 const router = express.Router();
 
 // Importar controladores
-const { 
+const {
   registrarMedico,
   obtenerMedicos,
   obtenerMedicoPorId,
-  actualizarMedico
+  actualizarMedico,
+  obtenerDisponibilidad
 } = require('../controllers/medicoController');
 
 const {
   agregarDisponibilidad,
   obtenerDisponibilidades,
   eliminarDisponibilidad,
-  marcarRangoNoDisponible,
-  obtenerCalendarioMes,
-  eliminarRangoNoDisponible
+  obtenerCalendario
 } = require('../controllers/disponibilidadController');
 
 const {
@@ -31,31 +30,23 @@ router.post('/registro', registrarMedico);
 // 🟢 GET: Obtener todos los médicos
 router.get('/', obtenerMedicos);
 
-// 🟢 GET: Obtener un médico por ID
-router.get('/:id', obtenerMedicoPorId);
-
-// 🟢 PUT: Actualizar datos del médico
-router.put('/:id', actualizarMedico);
-
 // ===== ENDPOINTS DE DISPONIBILIDAD =====
 
-// 🟢 POST: Agregar disponibilidad horaria
+// 🟢 POST: Agregar disponibilidad (marcar día NO disponible)
 router.post('/:id/disponibilidad', agregarDisponibilidad);
-
-// 🟢 POST: Marcar múltiples días NO disponibles (rango)
-router.post('/:id/disponibilidad-rango', marcarRangoNoDisponible);
 
 // 🟢 GET: Obtener disponibilidades de un médico
 router.get('/:id/disponibilidades', obtenerDisponibilidades);
 
-// 🟢 GET: Obtener calendario del mes (disponibles vs no disponibles)
-router.get('/:id/calendario', obtenerCalendarioMes);
+// 🟢 GET: Obtener calendario del mes
+router.get('/:id/calendario', obtenerCalendario);
 
-// 🟢 DELETE: Eliminar disponibilidad
+// 🟢 DELETE: Eliminar disponibilidad (marcar día como disponible)
 router.delete('/disponibilidad/:disponibilidadId', eliminarDisponibilidad);
 
-// 🟢 DELETE: Eliminar rango de marcaciones (dejar disponible todo el rango)
-router.delete('/:id/disponibilidad-rango', eliminarRangoNoDisponible);
+
+// 🟢 DELETE: Eliminar disponibilidad (simple)
+router.delete('/:id/disponibilidad/:disponibilidadId', eliminarDisponibilidad);
 
 // ===== ENDPOINTS DE CITAS =====
 
@@ -64,5 +55,16 @@ router.get('/:id/citas', obtenerCitasMedico);
 
 // 🟢 PUT: Actualizar estado de cita
 router.put('/cita/:citaId', actualizarEstadoCita);
+
+// ===== ENDPOINTS DE MÉDICO (GENÉRICAS AL FINAL) =====
+
+// 🟢 GET: Obtener un médico por ID
+router.get('/:id', obtenerMedicoPorId);
+
+// 🟢 GET: Obtener disponibilidad calculada
+router.get('/:id/disponibilidad', obtenerDisponibilidad);
+
+// 🟢 PUT: Actualizar datos del médico
+router.put('/:id', actualizarMedico);
 
 module.exports = router;

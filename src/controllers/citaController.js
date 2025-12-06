@@ -1,139 +1,146 @@
-const { Client } = require('pg');
-require('dotenv').config();
-
-const getClient = () => {
-  return new Client({
-    connectionString: process.env.DATABASE_URL
-  });
-};
+const prisma = require('../config/prisma');
 
 // ✅ Obtener citas del médico
 const obtenerCitasMedico = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
-    await client.connect();
+    const { estado } = req.query;
+
+    const medicoId = parseInt(id);
+    if (isNaN(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
 
     // Verificar que el médico existe
-    const medicoResult = await client.query(
-      'SELECT id FROM medicos WHERE id = $1',
-      [id]
-    );
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
-    // Obtener el filtro de estado desde query params
-    const { estado } = req.query;
-
-    // Construir query con filtro opcional de estado
-    let query = `
-      SELECT c.*, p.id as paciente_id, u.nombre, u.apellido, u.email, u.telefono
-      FROM citas c
-      JOIN pacientes p ON c.paciente_id = p.id
-      JOIN usuarios u ON p.usuario_id = u.id
-      WHERE c.medico_id = $1
-    `;
-
-    const params = [id];
-
+    // Construir filtro con estado opcional
+    const where = { medico_id: medicoId };
     if (estado) {
-      query += ` AND c.estado = $2`;
-      params.push(estado);
+      where.estado = estado;
     }
 
-    query += ` ORDER BY c.fecha_hora DESC`;
+    const citas = await prisma.cita.findMany({
+      where,
+      include: {
+        paciente: {
+          include: {
+            usuario: {
+              select: {
+                nombre: true,
+                apellido: true,
+                email: true,
+                telefono: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { fecha_hora: 'desc' }
+    });
 
-    const citasResult = await client.query(query, params);
-
-    await client.end();
+    // Aplanar datos para el frontend
+    const citasMapeadas = citas.map(cita => ({
+      id: cita.id,
+      fecha_hora: cita.fecha_hora,
+      fecha: cita.fecha,
+      hora_inicio: cita.hora_inicio,
+      hora_fin: cita.hora_fin,
+      motivo: cita.motivo,
+      estado: cita.estado,
+      comentario_medico: cita.comentario_medico,
+      paciente_id: cita.paciente_id,
+      medico_id: cita.medico_id,
+      nombre: cita.paciente?.usuario?.nombre || 'N/A',
+      apellido: cita.paciente?.usuario?.apellido || '',
+      email: cita.paciente?.usuario?.email || '',
+      telefono: cita.paciente?.usuario?.telefono || ''
+    }));
 
     res.json({
-      total: citasResult.rows.length,
-      data: citasResult.rows
+      total: citasMapeadas.length,
+      data: citasMapeadas
     });
 
   } catch (error) {
-    console.error('❌ Error en obtenerCitasMedico:', error.message);
-    console.error('Detalles del error:', error);
-    try {
-      await client.end();
-    } catch (e) {
-      // Ignorar error al cerrar conexión
-    }
-    res.status(500).json({
-      error: 'Error al obtener citas',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Error en obtenerCitasMedico:', error);
+    res.status(500).json({ error: 'Error al obtener citas' });
   }
 };
 
-// ✅ Actualizar estado de cita
-const actualizarEstadoCita = async (req, res) => {
-  const client = getClient();
+// V Obtener una cita por ID
+const obtenerCitaPorId = async (req, res) => {
   try {
-    const { citaId } = req.params;
-    const { estado } = req.body;
+    const { id } = req.params;
+    const citaId = parseInt(id);
 
-    // Validaciones
-    if (!estado) {
-      return res.status(400).json({ error: 'El campo estado es requerido' });
-    }
-
-    const estadosValidos = ['pendiente', 'confirmada', 'cancelada', 'completada'];
-    if (!estadosValidos.includes(estado)) {
-      return res.status(400).json({ error: 'Estado inválido. Debe ser: pendiente, confirmada, cancelada o completada' });
-    }
-
-    await client.connect();
-
-    // Verificar que la cita existe
-    const citaResult = await client.query(
-      'SELECT * FROM citas WHERE id = $1',
-      [citaId]
-    );
-
-    if (citaResult.rows.length === 0) {
-      await client.end();
-      return res.status(404).json({ error: 'Cita no encontrada' });
-    }
-
-    // Actualizar estado
-    const updateResult = await client.query(
-      'UPDATE citas SET estado = $1 WHERE id = $2 RETURNING *',
-      [estado, citaId]
-    );
-
-    const citaActualizada = updateResult.rows[0];
-
-    // Obtener información del paciente
-    const pacienteResult = await client.query(`
-      SELECT p.id as paciente_id, u.nombre, u.apellido, u.email, u.telefono
-      FROM pacientes p
-      JOIN usuarios u ON p.usuario_id = u.id
-      WHERE p.id = $1
-    `, [citaActualizada.paciente_id]);
-
-    await client.end();
-
-    res.json({
-      message: 'Estado de cita actualizado',
-      data: {
-        ...citaActualizada,
-        paciente: pacienteResult.rows[0]
+    const cita = await prisma.cita.findUnique({
+      where: { id: citaId },
+      include: {
+        paciente: {
+          include: { usuario: true }
+        },
+        medico: {
+          include: { usuario: true }
+        }
       }
     });
 
+    if (!cita) {
+      return res.status(404).json({ error: 'Cita no encontrada' });
+    }
+
+    res.json({ data: cita });
+
   } catch (error) {
     console.error(error);
-    await client.end();
-    res.status(500).json({ error: 'Error al actualizar estado de cita' });
+    res.status(500).json({ error: 'Error al obtener cita' });
+  }
+};
+
+// ✅ Actualizar estado de una cita
+const actualizarEstadoCita = async (req, res) => {
+  try {
+    // Si la ruta es /cita/:citaId, el param es citaId
+    const { citaId } = req.params;
+    const { estado } = req.body;
+
+    if (!['pendiente', 'confirmada', 'cancelada', 'completada'].includes(estado)) {
+      return res.status(400).json({ error: 'Estado inválido' });
+    }
+
+    const id = parseInt(citaId);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'ID de cita inválido' });
+    }
+
+    const cita = await prisma.cita.update({
+      where: { id },
+      data: { estado }
+    });
+
+    res.json({
+      message: 'Estado actualizado',
+      data: cita
+    });
+
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Cita no encontrada' });
+    }
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar cita' });
   }
 };
 
 module.exports = {
   obtenerCitasMedico,
+  obtenerCitaPorId,
   actualizarEstadoCita
 };
