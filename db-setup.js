@@ -97,10 +97,21 @@ CREATE TABLE IF NOT EXISTS disponibilidades_medico (
   id SERIAL PRIMARY KEY,
   medico_id INTEGER NOT NULL REFERENCES medicos(id) ON DELETE CASCADE,
   fecha DATE NOT NULL,
-  disponible BOOLEAN,
+  disponible BOOLEAN DEFAULT false,
   fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(medico_id, fecha)
 );
+
+-- Asegurar que la columna 'disponible' existe (por si la tabla ya existía)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name='disponibilidades_medico' AND column_name='disponible'
+  ) THEN
+    ALTER TABLE disponibilidades_medico ADD COLUMN disponible BOOLEAN DEFAULT false;
+  END IF;
+END $$;
 
 -- ============================================
 -- TABLA: citas
@@ -110,14 +121,41 @@ CREATE TABLE IF NOT EXISTS citas (
   id SERIAL PRIMARY KEY,
   paciente_id INTEGER NOT NULL REFERENCES pacientes(id) ON DELETE CASCADE,
   medico_id INTEGER NOT NULL REFERENCES medicos(id) ON DELETE CASCADE,
-  fecha TIMESTAMP NOT NULL,
-  hora_inicio VARCHAR(10) NOT NULL,
-  hora_fin VARCHAR(10) NOT NULL,
+  fecha_hora TIMESTAMP NOT NULL,
   estado VARCHAR(50) DEFAULT 'pendiente',
   motivo TEXT,
   comentario_medico TEXT,
   fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Asegurar que la columna 'fecha_hora' existe (por si había una versión antigua)
+DO $$ 
+BEGIN
+  -- Si NO existe fecha_hora, agregarla
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name='citas' AND column_name='fecha_hora'
+  ) THEN
+    -- Si existe 'fecha', renombrarla
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_name='citas' AND column_name='fecha'
+    ) THEN
+      ALTER TABLE citas RENAME COLUMN fecha TO fecha_hora;
+    ELSE
+      -- Si no existe ninguna, agregarla
+      ALTER TABLE citas ADD COLUMN fecha_hora TIMESTAMP;
+    END IF;
+  END IF;
+  
+  -- Eliminar columnas antiguas si existen
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='citas' AND column_name='hora_inicio') THEN
+    ALTER TABLE citas DROP COLUMN hora_inicio;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='citas' AND column_name='hora_fin') THEN
+    ALTER TABLE citas DROP COLUMN hora_fin;
+  END IF;
+END $$;
 
 -- ============================================
 -- ÍNDICES para mejor rendimiento
@@ -130,7 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_disponibilidades_medico_id ON disponibilidades_me
 CREATE INDEX IF NOT EXISTS idx_disponibilidades_fecha ON disponibilidades_medico(fecha);
 CREATE INDEX IF NOT EXISTS idx_citas_paciente_id ON citas(paciente_id);
 CREATE INDEX IF NOT EXISTS idx_citas_medico_id ON citas(medico_id);
-CREATE INDEX IF NOT EXISTS idx_citas_fecha ON citas(fecha);
+CREATE INDEX IF NOT EXISTS idx_citas_fecha_hora ON citas(fecha_hora);
 
 -- ============================================
 -- INSERTAR ROLES INICIALES

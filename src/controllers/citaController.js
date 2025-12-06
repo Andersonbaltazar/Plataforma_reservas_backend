@@ -25,14 +25,28 @@ const obtenerCitasMedico = async (req, res) => {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
-    const citasResult = await client.query(`
+    // Obtener el filtro de estado desde query params
+    const { estado } = req.query;
+
+    // Construir query con filtro opcional de estado
+    let query = `
       SELECT c.*, p.id as paciente_id, u.nombre, u.apellido, u.email, u.telefono
       FROM citas c
       JOIN pacientes p ON c.paciente_id = p.id
       JOIN usuarios u ON p.usuario_id = u.id
       WHERE c.medico_id = $1
-      ORDER BY c.fecha_hora DESC
-    `, [id]);
+    `;
+
+    const params = [id];
+
+    if (estado) {
+      query += ` AND c.estado = $2`;
+      params.push(estado);
+    }
+
+    query += ` ORDER BY c.fecha_hora DESC`;
+
+    const citasResult = await client.query(query, params);
 
     await client.end();
 
@@ -42,9 +56,17 @@ const obtenerCitasMedico = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
-    res.status(500).json({ error: 'Error al obtener citas' });
+    console.error('❌ Error en obtenerCitasMedico:', error.message);
+    console.error('Detalles del error:', error);
+    try {
+      await client.end();
+    } catch (e) {
+      // Ignorar error al cerrar conexión
+    }
+    res.status(500).json({
+      error: 'Error al obtener citas',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 

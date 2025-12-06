@@ -11,14 +11,14 @@ const getClient = () => {
 const registrarMedico = async (req, res) => {
   const client = getClient();
   try {
-    const { 
-      email, 
-      nombre, 
-      apellido, 
-      telefono, 
-      especialidad, 
+    const {
+      email,
+      nombre,
+      apellido,
+      telefono,
+      especialidad,
       descripcion,
-      foto_perfil 
+      foto_perfil
     } = req.body;
 
     // Validaciones básicas
@@ -91,9 +91,9 @@ const obtenerMedicos = async (req, res) => {
 
     await client.end();
 
-    res.json({ 
+    res.json({
       total: result.rows.length,
-      data: result.rows 
+      data: result.rows
     });
 
   } catch (error) {
@@ -133,13 +133,13 @@ const obtenerMedicoPorId = async (req, res) => {
     );
 
     const citasResult = await client.query(
-      'SELECT c.*, p.usuario_id as paciente_usuario_id FROM citas c JOIN pacientes p ON c.paciente_id = p.id WHERE c.medico_id = $1 ORDER BY c.fecha DESC',
+      'SELECT c.*, p.usuario_id as paciente_usuario_id FROM citas c JOIN pacientes p ON c.paciente_id = p.id WHERE c.medico_id = $1 ORDER BY c.fecha_hora DESC',
       [id]
     );
 
     await client.end();
 
-    res.json({ 
+    res.json({
       data: {
         ...medico,
         usuario: usuarioResult.rows[0],
@@ -160,13 +160,13 @@ const actualizarMedico = async (req, res) => {
   const client = getClient();
   try {
     const { id } = req.params;
-    const { 
-      nombre, 
-      apellido, 
-      telefono, 
-      especialidad, 
+    const {
+      nombre,
+      apellido,
+      telefono,
+      especialidad,
       descripcion,
-      foto_perfil 
+      foto_perfil
     } = req.body;
 
     await client.connect();

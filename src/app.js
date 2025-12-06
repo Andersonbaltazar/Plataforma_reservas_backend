@@ -34,9 +34,10 @@ app.get('/', (req, res) => {
     message: 'Bienvenido a Plataforma de Reservas Backend',
     version: '1.0.0',
     endpoints: {
-      medicos: '/api/medicos',
-      pacientes: '/api/paciente',
-      citas: '/api/citas',
+      auth: '/auth',
+      medicos: '/medicos',
+      pacientes: '/paciente',
+      citas: '/citas',
       health: '/health'
     }
   });
@@ -46,11 +47,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Servidor activo' });
 });
 
-// Rutas de autenticación
+// Rutas - SIN prefijo /api
 app.use('/auth', authRoutes);
-app.use('/api/medicos', medicoRoutes);
-app.use('/api/paciente', pacienteRoutes);
-app.use('/api/citas', citaRoutes);
+app.use('/medicos', medicoRoutes);
+app.use('/paciente', pacienteRoutes);
+app.use('/citas', citaRoutes);
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;

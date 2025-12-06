@@ -108,10 +108,10 @@ const obtenerDisponibilidades = async (req, res) => {
 
     await client.end();
 
-    res.json({ 
+    res.json({
       total_no_disponibles: noDisponiblesResult.rows.length,
       por_razon: {},
-      data: noDisponiblesResult.rows 
+      data: noDisponiblesResult.rows
     });
 
   } catch (error) {
@@ -170,7 +170,7 @@ const marcarRangoNoDisponible = async (req, res) => {
     // Validar formatos
     const inicio = new Date(fechaInicio);
     const fin = new Date(fechaFin);
-    
+
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
       return res.status(400).json({ error: 'Fechas inválidas. Usar formato YYYY-MM-DD' });
     }
