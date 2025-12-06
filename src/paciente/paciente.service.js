@@ -6,7 +6,7 @@ class PacienteService {
     async getByUsuarioId(usuarioId) {
         try {
             const paciente = await prisma.paciente.findUnique({
-                where: { usuario_id: usuarioId },
+                where: { usuario_id: parseInt(usuarioId) },
                 include: {
                     usuario: {
                         select: {

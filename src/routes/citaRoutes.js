@@ -2,9 +2,11 @@
 const express = require('express');
 const router = express.Router();
 const citaController = require('../cita/cita.controller');
-const { mockUserMiddleware } = require('../middlewares/mock-user.middleware');
+const { authenticateToken } = require('../middlewares/auth');
 
-router.use(mockUserMiddleware);
+// Todas las rutas de citas requieren autenticación
+router.use(authenticateToken);
+
 router.post('/', citaController.create);
 router.get('/:id', citaController.getById);
 router.put('/:id/cancelar', citaController.cancelar);

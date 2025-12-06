@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken } = require('../middlewares/auth');
 
 const {
     obtenerCitasPaciente,
@@ -11,6 +12,8 @@ const {
 } = require('../controllers/medicoController');
 
 // ===== ENDPOINTS DE PACIENTE =====
+// Todas las rutas requieren autenticación
+router.use(authenticateToken);
 
 // GET: Obtener citas del paciente 
 router.get('/citas', obtenerCitasPaciente);
@@ -29,3 +32,4 @@ router.put('/citas/:id', actualizarCita);
 router.get('/medicos-disponibles', obtenerMedicos);
 
 module.exports = router;
+

@@ -202,10 +202,17 @@ const me = async (req, res) => {
     }
 
     if (req.user.roleId === 1) {
-      const paciente = await prisma.paciente.findUnique({
+      let paciente = await prisma.paciente.findUnique({
         where: { usuario_id: parseInt(req.user.id) },
         select: { id: true }
       });
+
+      if (!paciente) {
+        paciente = await prisma.paciente.create({
+          data: { usuario_id: parseInt(req.user.id) },
+          select: { id: true }
+        });
+      }
 
       if (paciente) {
         userResponse.paciente_id = paciente.id;

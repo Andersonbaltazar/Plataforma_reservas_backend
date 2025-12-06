@@ -124,21 +124,32 @@ const findOrCreateOAuthUser = async (profile, provider) => {
     const nombre = nameParts[0] || 'Usuario';
     const apellido = nameParts.slice(1).join(' ') || nombre;
     const avatar = profile.photos?.[0]?.value || null;
+
     let user = await prisma.usuario.findFirst({
       where: {
         oauth_provider: provider,
         oauth_provider_id: oauthId
       },
-      include: { rol: true }
+      include: { rol: true, paciente: true, medico: true }
     });
 
     if (user) {
+      // Usuario OAuth existe, verificar que tenga registro de paciente
+      if (!user.paciente && user.role_id === 1) {
+        await prisma.paciente.create({
+          data: { usuario_id: user.id }
+        });
+        user = await prisma.usuario.findUnique({
+          where: { id: user.id },
+          include: { rol: true, paciente: true, medico: true }
+        });
+      }
       return formatUser(user, avatar, provider, oauthId);
     }
 
     user = await prisma.usuario.findUnique({
       where: { email },
-      include: { rol: true }
+      include: { rol: true, paciente: true, medico: true }
     });
 
     if (user) {
@@ -148,8 +159,19 @@ const findOrCreateOAuthUser = async (profile, provider) => {
           oauth_provider: provider,
           oauth_provider_id: oauthId
         },
-        include: { rol: true }
+        include: { rol: true, paciente: true, medico: true }
       });
+
+      if (!user.paciente && user.role_id === 1) {
+        await prisma.paciente.create({
+          data: { usuario_id: user.id }
+        });
+        user = await prisma.usuario.findUnique({
+          where: { id: user.id },
+          include: { rol: true, paciente: true, medico: true }
+        });
+      }
+
       return formatUser(user, avatar, provider, oauthId);
     }
 
@@ -169,6 +191,16 @@ const findOrCreateOAuthUser = async (profile, provider) => {
         activo: true
       },
       include: { rol: true }
+    });
+
+    const paciente = await prisma.paciente.create({
+      data: {
+        usuario_id: user.id
+      }
+    });
+    user = await prisma.usuario.findUnique({
+      where: { id: user.id },
+      include: { rol: true, paciente: true, medico: true }
     });
 
     return formatUser(user, avatar, provider, oauthId);
@@ -191,7 +223,9 @@ const formatUser = (user, avatar, provider, oauthId) => {
     oauthProvider: user.oauth_provider || provider,
     oauthId: user.oauth_provider_id || oauthId,
     activo: user.activo,
-    avatar: avatar
+    avatar: avatar,
+    paciente_id: user.paciente ? user.paciente.id : null,
+    medico_id: user.medico ? user.medico.id : null
   };
 };
 
