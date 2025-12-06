@@ -31,13 +31,7 @@ router.post('/registro', registrarMedico);
 // 🟢 GET: Obtener todos los médicos
 router.get('/', obtenerMedicos);
 
-// 🟢 GET: Obtener un médico por ID
-router.get('/:id', obtenerMedicoPorId);
-
-// 🟢 PUT: Actualizar datos del médico
-router.put('/:id', actualizarMedico);
-
-// ===== ENDPOINTS DE DISPONIBILIDAD =====
+// ===== ENDPOINTS DE DISPONIBILIDAD (ESPECÍFICAS PRIMERO) =====
 
 // 🟢 POST: Agregar disponibilidad horaria
 router.post('/:id/disponibilidad', agregarDisponibilidad);
@@ -51,11 +45,11 @@ router.get('/:id/disponibilidades', obtenerDisponibilidades);
 // 🟢 GET: Obtener calendario del mes (disponibles vs no disponibles)
 router.get('/:id/calendario', obtenerCalendarioMes);
 
-// 🟢 DELETE: Eliminar disponibilidad
-router.delete('/disponibilidad/:disponibilidadId', eliminarDisponibilidad);
-
 // 🟢 DELETE: Eliminar rango de marcaciones (dejar disponible todo el rango)
 router.delete('/:id/disponibilidad-rango', eliminarRangoNoDisponible);
+
+// 🟢 DELETE: Eliminar disponibilidad (simple)
+router.delete('/:id/disponibilidad/:disponibilidadId', eliminarDisponibilidad);
 
 // ===== ENDPOINTS DE CITAS =====
 
@@ -63,6 +57,14 @@ router.delete('/:id/disponibilidad-rango', eliminarRangoNoDisponible);
 router.get('/:id/citas', obtenerCitasMedico);
 
 // 🟢 PUT: Actualizar estado de cita
-router.put('/cita/:citaId', actualizarEstadoCita);
+router.put('/:id/cita/:citaId', actualizarEstadoCita);
+
+// ===== ENDPOINTS DE MÉDICO (GENÉRICAS AL FINAL) =====
+
+// 🟢 GET: Obtener un médico por ID
+router.get('/:id', obtenerMedicoPorId);
+
+// 🟢 PUT: Actualizar datos del médico
+router.put('/:id', actualizarMedico);
 
 module.exports = router;

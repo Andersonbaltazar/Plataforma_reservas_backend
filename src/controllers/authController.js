@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { findUserByEmail, createUser } = require('../models/users');
 const { isValidEmail, isValidPassword } = require('../utils/validators');
@@ -139,18 +139,42 @@ const login = async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    // Preparar datos del usuario
+    const userData = {
+      id: user.id,
+      email: user.email,
+      nombre: user.nombre,
+      apellido: user.apellido,
+      name: user.name,
+      roleId: user.roleId,
+      rol_nombre: user.rol_nombre
+    };
+
+    // Si es MÉDICO, obtener medico_id
+    if (user.roleId === 2) {
+      const medico = await prisma.medico.findUnique({
+        where: { usuario_id: parseInt(user.id) }
+      });
+      if (medico) {
+        userData.medico_id = medico.id;
+        userData.especialidad = medico.especialidad;
+      }
+    }
+
+    // Si es PACIENTE, obtener paciente_id
+    if (user.roleId === 1) {
+      const paciente = await prisma.paciente.findUnique({
+        where: { usuario_id: parseInt(user.id) }
+      });
+      if (paciente) {
+        userData.paciente_id = paciente.id;
+      }
+    }
+
     res.json({
       message: 'Login exitoso',
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        nombre: user.nombre,
-        apellido: user.apellido,
-        name: user.name,
-        roleId: user.roleId,
-        rol_nombre: user.rol_nombre
-      }
+      user: userData
     });
   } catch (error) {
     console.error('Error en login:', error);
@@ -164,19 +188,40 @@ const login = async (req, res) => {
 const me = async (req, res) => {
   try {
     // req.user ya viene del middleware authenticateToken
-    res.json({
-      user: {
-        id: req.user.id,
-        email: req.user.email,
-        nombre: req.user.nombre,
-        apellido: req.user.apellido,
-        name: req.user.name,
-        roleId: req.user.roleId,
-        rol_nombre: req.user.rol_nombre,
-        telefono: req.user.telefono || null,
-        oauthProvider: req.user.oauthProvider || null
+    const userData = {
+      id: req.user.id,
+      email: req.user.email,
+      nombre: req.user.nombre,
+      apellido: req.user.apellido,
+      name: req.user.name,
+      roleId: req.user.roleId,
+      rol_nombre: req.user.rol_nombre,
+      telefono: req.user.telefono || null,
+      oauthProvider: req.user.oauthProvider || null
+    };
+
+    // Si el usuario es MÉDICO, obtener su medico_id
+    if (req.user.roleId === 2) {
+      const medico = await prisma.medico.findUnique({
+        where: { usuario_id: parseInt(req.user.id) }
+      });
+      if (medico) {
+        userData.medico_id = medico.id;
+        userData.especialidad = medico.especialidad;
       }
-    });
+    }
+
+    // Si el usuario es PACIENTE, obtener su paciente_id
+    if (req.user.roleId === 1) {
+      const paciente = await prisma.paciente.findUnique({
+        where: { usuario_id: parseInt(req.user.id) }
+      });
+      if (paciente) {
+        userData.paciente_id = paciente.id;
+      }
+    }
+
+    res.json({ user: userData });
   } catch (error) {
     console.error('Error en me:', error);
     res.status(500).json({

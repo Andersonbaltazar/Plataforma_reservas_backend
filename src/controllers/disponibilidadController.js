@@ -1,22 +1,19 @@
-const { Client } = require('pg');
-require('dotenv').config();
-
-const getClient = () => {
-  return new Client({
-    connectionString: process.env.DATABASE_URL
-  });
-};
+const prisma = require('../config/prisma');
 
 // ✅ Marcar/Actualizar día NO disponible
 const agregarDisponibilidad = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
-    const { fecha, razon } = req.body;
+    const { fecha } = req.body;
 
     // Validaciones
-    if (!fecha) {
-      return res.status(400).json({ error: 'Campos requeridos: fecha (YYYY-MM-DD)' });
+    if (!id || !fecha) {
+      return res.status(400).json({ error: 'Campos requeridos: id (parámetro), fecha (body)' });
+    }
+
+    const medicoId = parseInt(id);
+    if (isNaN(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
     }
 
     // Validar formato de fecha
@@ -25,152 +22,162 @@ const agregarDisponibilidad = async (req, res) => {
       return res.status(400).json({ error: 'Fecha inválida. Usar formato YYYY-MM-DD' });
     }
 
-    await client.connect();
-
     // Verificar que el médico existe
-    const medicoResult = await client.query(
-      'SELECT id FROM medicos WHERE id = $1',
-      [id]
-    );
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
     // Verificar si ya existe una entrada para esa fecha
-    const existente = await client.query(
-      'SELECT id FROM disponibilidades_medico WHERE medico_id = $1 AND fecha = $2',
-      [id, fecha]
-    );
+    const existente = await prisma.disponibilidadMedico.findFirst({
+      where: {
+        medico_id: medicoId,
+        fecha: new Date(fecha)
+      }
+    });
 
     let resultado;
-    if (existente.rows.length > 0) {
+    if (existente) {
       // Actualizar
-      resultado = await client.query(
-        'UPDATE disponibilidades_medico SET disponible = false WHERE medico_id = $1 AND fecha = $2 RETURNING *',
-        [id, fecha]
-      );
+      resultado = await prisma.disponibilidadMedico.update({
+        where: { id: existente.id },
+        data: { no_disponible: true }
+      });
     } else {
       // Crear nueva entrada (marcado como no disponible)
-      resultado = await client.query(
-        'INSERT INTO disponibilidades_medico (medico_id, fecha, disponible) VALUES ($1, $2, false) RETURNING *',
-        [id, fecha]
-      );
+      resultado = await prisma.disponibilidadMedico.create({
+        data: {
+          medico_id: medicoId,
+          fecha: new Date(fecha),
+          no_disponible: true
+        }
+      });
     }
-
-    await client.end();
 
     res.status(201).json({
       message: 'Día marcado como NO DISPONIBLE',
-      data: resultado.rows[0]
+      data: resultado
     });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
-    res.status(500).json({ error: 'Error al marcar disponibilidad' });
+    console.error('Error en agregarDisponibilidad:', error);
+    res.status(500).json({ 
+      error: 'Error al marcar disponibilidad',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
-// ✅ Obtener días NO disponibles de un médico (por rango de fechas opcional)
+// ✅ Obtener días NO disponibles de un médico
 const obtenerDisponibilidades = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
-    const { fechaInicio, fechaFin } = req.query; // Opcional: rango de fechas
+    const { fechaInicio, fechaFin } = req.query;
 
-    await client.connect();
+    if (!id) {
+      return res.status(400).json({ error: 'ID de médico requerido' });
+    }
+
+    const medicoId = parseInt(id);
+    if (isNaN(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
 
     // Verificar que el médico existe
-    const medicoResult = await client.query(
-      'SELECT id FROM medicos WHERE id = $1',
-      [id]
-    );
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
-    let query = 'SELECT * FROM disponibilidades_medico WHERE medico_id = $1 AND disponible = false';
-    const params = [id];
+    const where = {
+      medico_id: medicoId,
+      no_disponible: true
+    };
 
     // Si se proporciona rango de fechas
     if (fechaInicio && fechaFin) {
-      query += ' AND fecha BETWEEN $2 AND $3';
-      params.push(fechaInicio, fechaFin);
+      where.fecha = {
+        gte: new Date(fechaInicio),
+        lte: new Date(fechaFin)
+      };
     }
 
-    query += ' ORDER BY fecha ASC';
+    const noDisponibles = await prisma.disponibilidadMedico.findMany({
+      where,
+      orderBy: { fecha: 'asc' }
+    });
 
-    const noDisponiblesResult = await client.query(query, params);
-
-    await client.end();
-
-    res.json({ 
-      total_no_disponibles: noDisponiblesResult.rows.length,
-      por_razon: {},
-      data: noDisponiblesResult.rows 
+    res.json({
+      total_no_disponibles: noDisponibles.length,
+      data: noDisponibles
     });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
+    console.error('Error en obtenerDisponibilidades:', error);
     res.status(500).json({ error: 'Error al obtener disponibilidades' });
   }
 };
 
-// ✅ Eliminar día NO disponible (marcar como disponible nuevamente)
+// ✅ Eliminar día NO disponible
 const eliminarDisponibilidad = async (req, res) => {
-  const client = getClient();
   try {
-    const { disponibilidadId } = req.params;
-    await client.connect();
+    const { id, disponibilidadId } = req.params;
+
+    if (!disponibilidadId) {
+      return res.status(400).json({ error: 'ID de disponibilidad requerido' });
+    }
+
+    const dispId = parseInt(disponibilidadId);
+    if (isNaN(dispId)) {
+      return res.status(400).json({ error: 'ID de disponibilidad inválido' });
+    }
 
     // Verificar que existe
-    const disponibilidadResult = await client.query(
-      'SELECT id FROM disponibilidades_medico WHERE id = $1',
-      [disponibilidadId]
-    );
+    const disponibilidad = await prisma.disponibilidadMedico.findUnique({
+      where: { id: dispId }
+    });
 
-    if (disponibilidadResult.rows.length === 0) {
-      await client.end();
+    if (!disponibilidad) {
       return res.status(404).json({ error: 'Marcación no encontrada' });
     }
 
-    await client.query(
-      'DELETE FROM disponibilidades_medico WHERE id = $1',
-      [disponibilidadId]
-    );
-
-    await client.end();
+    // Eliminar
+    await prisma.disponibilidadMedico.delete({
+      where: { id: dispId }
+    });
 
     res.json({ message: 'Día marcado nuevamente como DISPONIBLE' });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
+    console.error('Error en eliminarDisponibilidad:', error);
     res.status(500).json({ error: 'Error al eliminar marcación' });
   }
 };
 
-// ✅ Marcar múltiples días como NO disponibles (rango de fechas)
+// ✅ Marcar múltiples días como NO disponibles (rango)
 const marcarRangoNoDisponible = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
     const { fechaInicio, fechaFin } = req.body;
 
-    // Validaciones
-    if (!fechaInicio || !fechaFin) {
-      return res.status(400).json({ error: 'Campos requeridos: fechaInicio, fechaFin (YYYY-MM-DD)' });
+    if (!id || !fechaInicio || !fechaFin) {
+      return res.status(400).json({ error: 'Campos requeridos: id (parámetro), fechaInicio, fechaFin (body)' });
     }
 
-    // Validar formatos
+    const medicoId = parseInt(id);
+    if (isNaN(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
+
     const inicio = new Date(fechaInicio);
     const fin = new Date(fechaFin);
-    
+
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
       return res.status(400).json({ error: 'Fechas inválidas. Usar formato YYYY-MM-DD' });
     }
@@ -179,16 +186,12 @@ const marcarRangoNoDisponible = async (req, res) => {
       return res.status(400).json({ error: 'fechaInicio debe ser menor o igual a fechaFin' });
     }
 
-    await client.connect();
-
     // Verificar que el médico existe
-    const medicoResult = await client.query(
-      'SELECT id FROM medicos WHERE id = $1',
-      [id]
-    );
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
@@ -199,34 +202,37 @@ const marcarRangoNoDisponible = async (req, res) => {
       const yyyy = fecha.getFullYear();
       const mm = String(fecha.getMonth() + 1).padStart(2, '0');
       const dd = String(fecha.getDate()).padStart(2, '0');
-      fechas.push(`${yyyy}-${mm}-${dd}`);
+      fechas.push(new Date(`${yyyy}-${mm}-${dd}`));
       fecha.setDate(fecha.getDate() + 1);
     }
 
     // Insertar/actualizar en lotes
     const resultados = [];
     for (const f of fechas) {
-      const existente = await client.query(
-        'SELECT id FROM disponibilidades_medico WHERE medico_id = $1 AND fecha = $2',
-        [id, f]
-      );
+      const existente = await prisma.disponibilidadMedico.findFirst({
+        where: {
+          medico_id: medicoId,
+          fecha: f
+        }
+      });
 
       let resultado;
-      if (existente.rows.length > 0) {
-        resultado = await client.query(
-          'UPDATE disponibilidades_medico SET disponible = false WHERE medico_id = $1 AND fecha = $2 RETURNING *',
-          [id, f]
-        );
+      if (existente) {
+        resultado = await prisma.disponibilidadMedico.update({
+          where: { id: existente.id },
+          data: { no_disponible: true }
+        });
       } else {
-        resultado = await client.query(
-          'INSERT INTO disponibilidades_medico (medico_id, fecha, disponible) VALUES ($1, $2, false) RETURNING *',
-          [id, f]
-        );
+        resultado = await prisma.disponibilidadMedico.create({
+          data: {
+            medico_id: medicoId,
+            fecha: f,
+            no_disponible: true
+          }
+        });
       }
-      resultados.push(resultado.rows[0]);
+      resultados.push(resultado);
     }
-
-    await client.end();
 
     res.status(201).json({
       message: `${resultados.length} días marcados como NO DISPONIBLES`,
@@ -237,20 +243,26 @@ const marcarRangoNoDisponible = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
+    console.error('Error en marcarRangoNoDisponible:', error);
     res.status(500).json({ error: 'Error al marcar rango de disponibilidad' });
   }
 };
 
-// ✅ Obtener calendario del mes (disponibles vs no disponibles)
+// ✅ Obtener calendario del mes
 const obtenerCalendarioMes = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
-    const { mes, ano } = req.query; // mes: 1-12, ano: YYYY
+    const { mes, ano } = req.query;
 
-    // Valores por defecto (mes actual)
+    if (!id) {
+      return res.status(400).json({ error: 'ID de médico requerido' });
+    }
+
+    const medicoId = parseInt(id);
+    if (isNaN(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
+
     const ahora = new Date();
     const mesActual = mes ? parseInt(mes) : ahora.getMonth() + 1;
     const anoActual = ano ? parseInt(ano) : ahora.getFullYear();
@@ -259,34 +271,33 @@ const obtenerCalendarioMes = async (req, res) => {
       return res.status(400).json({ error: 'Mes debe estar entre 1 y 12' });
     }
 
-    await client.connect();
-
     // Verificar que el médico existe
-    const medicoResult = await client.query(
-      'SELECT id FROM medicos WHERE id = $1',
-      [id]
-    );
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
-    // Obtener todos los días no disponibles del mes
-    const fechaInicio = `${anoActual}-${String(mesActual).padStart(2, '0')}-01`;
+    const fechaInicio = new Date(anoActual, mesActual - 1, 1);
     const ultimoDia = new Date(anoActual, mesActual, 0).getDate();
-    const fechaFin = `${anoActual}-${String(mesActual).padStart(2, '0')}-${ultimoDia}`;
+    const fechaFin = new Date(anoActual, mesActual - 1, ultimoDia);
 
-    const noDisponiblesResult = await client.query(
-      'SELECT * FROM disponibilidades_medico WHERE medico_id = $1 AND fecha BETWEEN $2 AND $3 AND disponible = false ORDER BY fecha ASC',
-      [id, fechaInicio, fechaFin]
-    );
+    const noDisponibles = await prisma.disponibilidadMedico.findMany({
+      where: {
+        medico_id: medicoId,
+        fecha: {
+          gte: fechaInicio,
+          lte: fechaFin
+        },
+        no_disponible: true
+      },
+      orderBy: { fecha: 'asc' }
+    });
 
-    await client.end();
-
-    // Construir mapa de días
     const diasNoDisponibles = {};
-    noDisponiblesResult.rows.forEach(d => {
+    noDisponibles.forEach(d => {
       const dia = new Date(d.fecha).getDate();
       diasNoDisponibles[dia] = {
         id: d.id,
@@ -294,7 +305,6 @@ const obtenerCalendarioMes = async (req, res) => {
       };
     });
 
-    // Construir calendario
     const calendario = {};
     for (let dia = 1; dia <= ultimoDia; dia++) {
       const fecha = new Date(anoActual, mesActual - 1, dia);
@@ -321,52 +331,58 @@ const obtenerCalendarioMes = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
+    console.error('Error en obtenerCalendarioMes:', error);
     res.status(500).json({ error: 'Error al obtener calendario' });
   }
 };
 
-// ✅ Eliminar todas las marcaciones de un rango (dejar disponible todo el rango)
+// ✅ Eliminar rango de disponibilidades
 const eliminarRangoNoDisponible = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
     const { fechaInicio, fechaFin } = req.body;
 
-    // Validaciones
-    if (!fechaInicio || !fechaFin) {
-      return res.status(400).json({ error: 'Campos requeridos: fechaInicio, fechaFin (YYYY-MM-DD)' });
+    if (!id || !fechaInicio || !fechaFin) {
+      return res.status(400).json({ error: 'Campos requeridos: id (parámetro), fechaInicio, fechaFin (body)' });
     }
 
-    await client.connect();
+    const medicoId = parseInt(id);
+    if (isNaN(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
 
     // Verificar que el médico existe
-    const medicoResult = await client.query(
-      'SELECT id FROM medicos WHERE id = $1',
-      [id]
-    );
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
     // Obtener registros a eliminar
-    const registrosAEliminar = await client.query(
-      'SELECT id FROM disponibilidades_medico WHERE medico_id = $1 AND fecha BETWEEN $2 AND $3',
-      [id, fechaInicio, fechaFin]
-    );
+    const registrosAEliminar = await prisma.disponibilidadMedico.findMany({
+      where: {
+        medico_id: medicoId,
+        fecha: {
+          gte: new Date(fechaInicio),
+          lte: new Date(fechaFin)
+        }
+      }
+    });
 
-    const cantidad = registrosAEliminar.rows.length;
+    const cantidad = registrosAEliminar.length;
 
     // Eliminar
-    await client.query(
-      'DELETE FROM disponibilidades_medico WHERE medico_id = $1 AND fecha BETWEEN $2 AND $3',
-      [id, fechaInicio, fechaFin]
-    );
-
-    await client.end();
+    await prisma.disponibilidadMedico.deleteMany({
+      where: {
+        medico_id: medicoId,
+        fecha: {
+          gte: new Date(fechaInicio),
+          lte: new Date(fechaFin)
+        }
+      }
+    });
 
     res.json({
       message: `${cantidad} días marcados nuevamente como DISPONIBLES`,
@@ -376,8 +392,7 @@ const eliminarRangoNoDisponible = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    await client.end();
+    console.error('Error en eliminarRangoNoDisponible:', error);
     res.status(500).json({ error: 'Error al eliminar rango de marcaciones' });
   }
 };

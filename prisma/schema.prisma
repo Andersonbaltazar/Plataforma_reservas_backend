@@ -95,7 +95,6 @@ model Medico {
   usuario_id      Int     @unique
   especialidad    String
   descripcion     String?
-  foto_perfil     String? // base64
   
   // Relaciones
   usuario              Usuario                @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
@@ -115,8 +114,6 @@ model DisponibilidadMedico {
   medico_id       Int
   fecha           DateTime  @db.Date // YYYY-MM-DD
   no_disponible   Boolean   @default(true) // true = médico NO disponible ese día
-  razon           String?   // Ej: "Vacaciones", "Cirugía programada", "Capacitación"
-  fecha_creacion  DateTime  @default(now())
   
   // Relaciones
   medico Medico @relation(fields: [medico_id], references: [id], onDelete: Cascade)

@@ -11,17 +11,14 @@ const getClient = () => {
 const registrarMedico = async (req, res) => {
   const client = getClient();
   try {
-    const { 
-      email, 
-      nombre, 
-      apellido, 
-      telefono, 
-      especialidad, 
-      descripcion,
-      foto_perfil 
-    } = req.body;
-
-    // Validaciones básicas
+  const { 
+    email, 
+    nombre, 
+    apellido, 
+    telefono, 
+    especialidad, 
+    descripcion
+  } = req.body;    // Validaciones básicas
     if (!email || !nombre || !apellido || !especialidad) {
       return res.status(400).json({ error: 'Campos requeridos: email, nombre, apellido, especialidad' });
     }
@@ -54,8 +51,8 @@ const registrarMedico = async (req, res) => {
 
     // Crear médico
     const medicoResult = await client.query(
-      'INSERT INTO medicos (usuario_id, especialidad, descripcion, foto_perfil) VALUES ($1, $2, $3, $4) RETURNING id, usuario_id, especialidad, descripcion, foto_perfil',
-      [usuario.id, especialidad, descripcion || null, foto_perfil || null]
+      'INSERT INTO medicos (usuario_id, especialidad, descripcion) VALUES ($1, $2, $3) RETURNING id, usuario_id, especialidad, descripcion',
+      [usuario.id, especialidad, descripcion || null]
     );
 
     const medico = medicoResult.rows[0];
@@ -165,8 +162,7 @@ const actualizarMedico = async (req, res) => {
       apellido, 
       telefono, 
       especialidad, 
-      descripcion,
-      foto_perfil 
+      descripcion
     } = req.body;
 
     await client.connect();
@@ -194,8 +190,8 @@ const actualizarMedico = async (req, res) => {
 
     // Actualizar médico
     const updateResult = await client.query(
-      'UPDATE medicos SET especialidad = COALESCE($1, especialidad), descripcion = COALESCE($2, descripcion), foto_perfil = COALESCE($3, foto_perfil) WHERE id = $4 RETURNING *',
-      [especialidad || null, descripcion || null, foto_perfil || null, id]
+      'UPDATE medicos SET especialidad = COALESCE($1, especialidad), descripcion = COALESCE($2, descripcion) WHERE id = $3 RETURNING *',
+      [especialidad || null, descripcion || null, id]
     );
 
     const medicoActualizado = updateResult.rows[0];

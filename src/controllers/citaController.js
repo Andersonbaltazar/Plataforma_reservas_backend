@@ -1,49 +1,54 @@
-const { Client } = require('pg');
-require('dotenv').config();
-
-const getClient = () => {
-  return new Client({
-    connectionString: process.env.DATABASE_URL
-  });
-};
+const prisma = require('../config/prisma');
 
 // ✅ Obtener citas del médico
 const obtenerCitasMedico = async (req, res) => {
-  const client = getClient();
   try {
     const { id } = req.params;
-    await client.connect();
+
+    if (!id) {
+      return res.status(400).json({ error: 'ID de médico requerido' });
+    }
+
+    const medicoId = parseInt(id);
+    if (isNaN(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
 
     // Verificar que el médico existe
-    const medicoResult = await client.query(
-      'SELECT id FROM medicos WHERE id = $1',
-      [id]
-    );
+    const medico = await prisma.medico.findUnique({
+      where: { id: medicoId }
+    });
 
-    if (medicoResult.rows.length === 0) {
-      await client.end();
+    if (!medico) {
       return res.status(404).json({ error: 'Médico no encontrado' });
     }
 
-    const citasResult = await client.query(`
-      SELECT c.*, p.id as paciente_id, u.nombre, u.apellido, u.email, u.telefono
-      FROM citas c
-      JOIN pacientes p ON c.paciente_id = p.id
-      JOIN usuarios u ON p.usuario_id = u.id
-      WHERE c.medico_id = $1
-      ORDER BY c.fecha_hora DESC
-    `, [id]);
-
-    await client.end();
+    const citas = await prisma.cita.findMany({
+      where: { medico_id: medicoId },
+      include: {
+        paciente: {
+          include: {
+            usuario: {
+              select: {
+                nombre: true,
+                apellido: true,
+                email: true,
+                telefono: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { fecha_hora: 'desc' }
+    });
 
     res.json({
-      total: citasResult.rows.length,
-      data: citasResult.rows
+      total: citas.length,
+      data: citas
     });
 
   } catch (error) {
     console.error(error);
-    await client.end();
     res.status(500).json({ error: 'Error al obtener citas' });
   }
 };

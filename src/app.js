@@ -47,7 +47,7 @@ app.get('/health', (req, res) => {
 });
 
 // Rutas de autenticación
-app.use('/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/medicos', medicoRoutes);
 app.use('/api/paciente', pacienteRoutes);
 app.use('/api/citas', citaRoutes);
